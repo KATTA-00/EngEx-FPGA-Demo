@@ -84,6 +84,179 @@ module vga_controller(
     end
 endmodule
 
+// ----------------- Pattern name overlay (below ESCAL banner) -----------------
+module text_overlay_pattern #(
+    parameter integer SCALE_LOG2 = 1  // smaller than ESCAL banner (2x)
+)(
+    input  wire [9:0] sx,
+    input  wire [8:0] sy,
+    input  wire [1:0] view_sel, // 00 full, 01 seahorse, 10 elephant, 11 deep
+    output reg        text_on
+);
+    localparam integer SCALE = (1 << SCALE_LOG2);
+    localparam integer NCHARS = 9; // max among: "DEEP TAIL" (9 incl space)
+    localparam integer RAW_W = NCHARS * 8;
+    localparam integer RAW_H = 8;
+    localparam integer W = RAW_W * SCALE;
+    localparam integer H = RAW_H * SCALE;
+
+    // Visible geometry
+    localparam integer SCREEN_W = 640;
+    localparam integer TOP_BORDER = 120; // (480-240)/2
+    // Place just below ESCAL banner: ESCAL Y0 = 120+240+8+20 (=388), ESCAL H=32, add 4px pad => 424
+    localparam [8:0] Y_BASE = 9'd424;
+    localparam [9:0] X0 = (SCREEN_W - W)/2;
+    localparam [8:0] Y0 = Y_BASE;
+
+    wire [9:0] x_local = sx - X0;
+    wire [8:0] y_local = sy - Y0;
+    wire [7:0] x_char = x_local >> SCALE_LOG2; // 0..(RAW_W-1)
+    wire [3:0] y_char = y_local >> SCALE_LOG2; // 0..7
+    wire [3:0] char_pos = x_char[7:3];         // 0..8
+    wire [2:0] col_idx  = x_char[2:0];
+
+    // Letter enumeration (reuse ids for clarity)
+    localparam [5:0]
+        L_A=6'd0, L_C=6'd1, L_D=6'd2, L_E=6'd3, L_F=6'd4, L_H=6'd5, L_I=6'd6,
+        L_L=6'd7, L_M=6'd8, L_N=6'd9, L_O=6'd10, L_P=6'd11, L_R=6'd12,
+        L_S=6'd13, L_T=6'd14, L_U=6'd15, L_SPACE=6'd63;
+
+    // Phrase selection per view
+    // 00: "FULL SET" (8 chars)
+    // 01: "SEAHORSE" (8 chars)
+    // 10: "ELEPHANT" (8 chars)
+    // 11: "DEEP TAIL" (9 chars)
+    reg [5:0] letter_idx;
+    always @(*) begin
+        case (view_sel)
+            2'b00: begin // FULL SET
+                case (char_pos)
+                    0: letter_idx=L_F; 1: letter_idx=L_U; 2: letter_idx=L_L; 3: letter_idx=L_L;
+                    4: letter_idx=L_SPACE; 5: letter_idx=L_S; 6: letter_idx=L_E; 7: letter_idx=L_T;
+                    default: letter_idx=L_SPACE;
+                endcase
+            end
+            2'b01: begin // SEAHORSE
+                case (char_pos)
+                    0: letter_idx=L_S; 1: letter_idx=L_E; 2: letter_idx=L_A; 3: letter_idx=L_H;
+                    4: letter_idx=L_O; 5: letter_idx=L_R; 6: letter_idx=L_S; 7: letter_idx=L_E;
+                    default: letter_idx=L_SPACE;
+                endcase
+            end
+            2'b10: begin // ELEPHANT
+                case (char_pos)
+                    0: letter_idx=L_E; 1: letter_idx=L_L; 2: letter_idx=L_E; 3: letter_idx=L_P;
+                    4: letter_idx=L_H; 5: letter_idx=L_A; 6: letter_idx=L_N; 7: letter_idx=L_T;
+                    default: letter_idx=L_SPACE;
+                endcase
+            end
+            default: begin // 2'b11: DEEP TAIL
+                case (char_pos)
+                    0: letter_idx=L_D; 1: letter_idx=L_E; 2: letter_idx=L_E; 3: letter_idx=L_P;
+                    4: letter_idx=L_SPACE; 5: letter_idx=L_T; 6: letter_idx=L_A; 7: letter_idx=L_I;
+                    8: letter_idx=L_L;
+                    default: letter_idx=L_SPACE;
+                endcase
+            end
+        endcase
+    end
+
+    reg [7:0] glyph_bits;
+    function [7:0] glyph_row3;
+        input [5:0] idx;
+        input [3:0] y;
+        begin
+            case (idx)
+                // A
+                L_A: case(y)
+                    0: glyph_row3=8'b01111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b11111110; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b10000010; default: glyph_row3=8'b00000000; endcase
+                // C
+                L_C: case(y)
+                    0: glyph_row3=8'b01111110; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
+                    3: glyph_row3=8'b10000000; 4: glyph_row3=8'b10000000; 5: glyph_row3=8'b10000000;
+                    6: glyph_row3=8'b01111110; default: glyph_row3=8'b00000000; endcase
+                // D
+                L_D: case(y)
+                    0: glyph_row3=8'b11111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b10000010; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b11111100; default: glyph_row3=8'b00000000; endcase
+                // E
+                L_E: case(y)
+                    0: glyph_row3=8'b11111110; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
+                    3: glyph_row3=8'b11111110; 4: glyph_row3=8'b10000000; 5: glyph_row3=8'b10000000;
+                    6: glyph_row3=8'b11111110; default: glyph_row3=8'b00000000; endcase
+                // F
+                L_F: case(y)
+                    0: glyph_row3=8'b11111110; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
+                    3: glyph_row3=8'b11111100; 4: glyph_row3=8'b10000000; 5: glyph_row3=8'b10000000;
+                    6: glyph_row3=8'b10000000; default: glyph_row3=8'b00000000; endcase
+                // H
+                L_H: case(y)
+                    0: glyph_row3=8'b10000010; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b11111110; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b10000010; default: glyph_row3=8'b00000000; endcase
+                // I
+                L_I: case(y)
+                    0: glyph_row3=8'b11111110; 1: glyph_row3=8'b00010000; 2: glyph_row3=8'b00010000;
+                    3: glyph_row3=8'b00010000; 4: glyph_row3=8'b00010000; 5: glyph_row3=8'b00010000;
+                    6: glyph_row3=8'b11111110; default: glyph_row3=8'b00000000; endcase
+                // L
+                L_L: case(y)
+                    0: glyph_row3=8'b10000000; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
+                    3: glyph_row3=8'b10000000; 4: glyph_row3=8'b10000000; 5: glyph_row3=8'b10000000;
+                    6: glyph_row3=8'b11111110; default: glyph_row3=8'b00000000; endcase
+                // N
+                L_N: case(y)
+                    0: glyph_row3=8'b10000010; 1: glyph_row3=8'b11000010; 2: glyph_row3=8'b10100010;
+                    3: glyph_row3=8'b10010010; 4: glyph_row3=8'b10001010; 5: glyph_row3=8'b10000110;
+                    6: glyph_row3=8'b10000010; default: glyph_row3=8'b00000000; endcase
+                // O
+                L_O: case(y)
+                    0: glyph_row3=8'b01111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b10000010; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b01111100; default: glyph_row3=8'b00000000; endcase
+                // P
+                L_P: case(y)
+                    0: glyph_row3=8'b11111110; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b11111110; 4: glyph_row3=8'b10000000; 5: glyph_row3=8'b10000000;
+                    6: glyph_row3=8'b10000000; default: glyph_row3=8'b00000000; endcase
+                // R
+                L_R: case(y)
+                    0: glyph_row3=8'b11111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b11111100; 4: glyph_row3=8'b10010000; 5: glyph_row3=8'b10001000;
+                    6: glyph_row3=8'b10000100; default: glyph_row3=8'b00000000; endcase
+                // S
+                L_S: case(y)
+                    0: glyph_row3=8'b01111110; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
+                    3: glyph_row3=8'b01111100; 4: glyph_row3=8'b00000010; 5: glyph_row3=8'b00000010;
+                    6: glyph_row3=8'b11111100; default: glyph_row3=8'b00000000; endcase
+                // T
+                L_T: case(y)
+                    0: glyph_row3=8'b11111110; 1: glyph_row3=8'b00010000; 2: glyph_row3=8'b00010000;
+                    3: glyph_row3=8'b00010000; 4: glyph_row3=8'b00010000; 5: glyph_row3=8'b00010000;
+                    6: glyph_row3=8'b00010000; default: glyph_row3=8'b00000000; endcase
+                // U
+                L_U: case(y)
+                    0: glyph_row3=8'b10000010; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b10000010; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b01111100; default: glyph_row3=8'b00000000; endcase
+                default: glyph_row3 = 8'b00000000; // space/undefined
+            endcase
+        end
+    endfunction
+
+    always @(*) begin
+        text_on = 1'b0;
+        glyph_bits = 8'b0;
+        if (sy >= Y0 && sy < (Y0 + H) && sx >= X0 && sx < (X0 + W)) begin
+            glyph_bits = glyph_row3(letter_idx, y_char);
+            text_on = glyph_bits[7 - col_idx];
+        end
+    end
+endmodule
+
 
 // ----------------- Bottom Text overlay: "ESCAL PERAMORPHIQ" (8x8 font) -----------------
 module text_overlay_bottom #(
@@ -981,6 +1154,9 @@ module top (
     wire text_on_bottom;
     text_overlay #(.SCALE_LOG2(2))        txt_top (.sx(sx), .sy(sy), .text_on(text_on_top));
     text_overlay_bottom #(.SCALE_LOG2(2)) txt_bot (.sx(sx), .sy(sy), .text_on(text_on_bottom));
+    // Pattern name (smaller) below ESCAL
+    wire text_on_pattern;
+    text_overlay_pattern #(.SCALE_LOG2(1)) txt_pat (.sx(sx), .sy(sy), .view_sel(view_sel), .text_on(text_on_pattern));
     // Edge highlight to sharpen boundaries (SW[8])
     // Compare successive visible pixels on the same scanline
     reg [7:0] iter_scaled_prev;
@@ -1006,7 +1182,7 @@ module top (
     wire [7:0] img_r = edge_on ? 8'hFF : base_r;
     wire [7:0] img_g = edge_on ? 8'hFF : base_g;
     wire [7:0] img_b = edge_on ? 8'hFF : base_b;
-    wire overlay_on = text_on_top | text_on_bottom;
+    wire overlay_on = text_on_top | text_on_bottom | text_on_pattern;
     assign VGA_R = vis ? (overlay_on ? 8'hFF : img_r) : 8'd0;
     assign VGA_G = vis ? (overlay_on ? 8'hFF : img_g) : 8'd0;
     assign VGA_B = vis ? (overlay_on ? 8'hFF : img_b) : 8'd0;
