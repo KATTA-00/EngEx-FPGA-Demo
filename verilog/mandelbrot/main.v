@@ -847,11 +847,11 @@ module top (
     localparam signed [31:0] CX2_MAX = -32'sd45875;  // -0.7
     localparam signed [31:0] CY2_MIN =  32'sd6554;   //  0.10
     localparam signed [31:0] CY2_MAX =  32'sd13107;  //  0.20
-    // Deep Tail
+    // Deep Tail (aspect-correct around -0.74 + 0.13i)
     localparam signed [31:0] CX3_MIN = -32'sd48824;  // -0.745
     localparam signed [31:0] CX3_MAX = -32'sd48129;  // -0.735
-    localparam signed [31:0] CY3_MIN =  32'sd8192;   //  0.125
-    localparam signed [31:0] CY3_MAX =  32'sd8847;   //  0.135
+    localparam signed [31:0] CY3_MIN =  32'sd8274;   //  0.12625
+    localparam signed [31:0] CY3_MAX =  32'sd8765;   //  0.13375
 
     wire signed [31:0] CX_MIN = (view_sel==2'b00) ? CX0_MIN : (view_sel==2'b01) ? CX1_MIN : (view_sel==2'b10) ? CX2_MIN : CX3_MIN;
     wire signed [31:0] CX_MAX = (view_sel==2'b00) ? CX0_MAX : (view_sel==2'b01) ? CX1_MAX : (view_sel==2'b10) ? CX2_MAX : CX3_MAX;
