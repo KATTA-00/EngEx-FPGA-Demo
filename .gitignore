@@ -57,5 +57,6 @@ dist/
 !.vscode/
 .history/
 
-# Exclude nested repo (tracked separately)
+# Local nested repo kept out of this repo
 fpga-demos/
+
