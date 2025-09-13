@@ -5,6 +5,7 @@
 // - SW[1] = 0 => fractal writer (real fractal)
 // - SW[0] = animation enable (color cycle)
 // - SW[3:2] = speed select: 00=+1, 01=+2, 10=+4, 11=+8 per VSYNC
+// - SW[5:4] = viewport preset, SW[7:6] = palette, SW[8] = edge highlight
 // - SW[5:4] = viewport preset (00 full, 01 seahorse, 10 elephant, 11 deep)
 // - SW[7:6] = palette select (00 rainbow, 01 fire, 10 ocean, 11 grayscale)
 // =======================================================
@@ -980,10 +981,31 @@ module top (
     wire text_on_bottom;
     text_overlay #(.SCALE_LOG2(2))        txt_top (.sx(sx), .sy(sy), .text_on(text_on_top));
     text_overlay_bottom #(.SCALE_LOG2(2)) txt_bot (.sx(sx), .sy(sy), .text_on(text_on_bottom));
+    // Edge highlight to sharpen boundaries (SW[8])
+    // Compare successive visible pixels on the same scanline
+    reg [7:0] iter_scaled_prev;
+    reg       vis_prev;
+    reg [9:0] sx_prev;
+    reg [8:0] sy_prev;
+    always @(posedge pixel_clk) begin
+        iter_scaled_prev <= iter_scaled;
+        vis_prev <= vis;
+        sx_prev <= sx;
+        sy_prev <= sy;
+    end
+    wire same_line_next = vis & vis_prev & (sy == sy_prev) & (sx == (sx_prev + 10'd1));
+    wire [7:0] diff_iter = (iter_scaled >= iter_scaled_prev) ?
+                           (iter_scaled - iter_scaled_prev) :
+                           (iter_scaled_prev - iter_scaled);
+    wire edge_on = SW[8] & same_line_next & (diff_iter >= 8'd6);
+
     // Draw overlay anywhere in the visible 640x480 region; image only inside display_on
-    wire [7:0] img_r = (display_on && frame_display_ready) ? {rgb18[17:12], 2'b00} : 8'd0;
-    wire [7:0] img_g = (display_on && frame_display_ready) ? {rgb18[11:6],  2'b00} : 8'd0;
-    wire [7:0] img_b = (display_on && frame_display_ready) ? {rgb18[5:0],   2'b00} : 8'd0;
+    wire [7:0] base_r = (display_on && frame_display_ready) ? {rgb18[17:12], 2'b00} : 8'd0;
+    wire [7:0] base_g = (display_on && frame_display_ready) ? {rgb18[11:6],  2'b00} : 8'd0;
+    wire [7:0] base_b = (display_on && frame_display_ready) ? {rgb18[5:0],   2'b00} : 8'd0;
+    wire [7:0] img_r = edge_on ? 8'hFF : base_r;
+    wire [7:0] img_g = edge_on ? 8'hFF : base_g;
+    wire [7:0] img_b = edge_on ? 8'hFF : base_b;
     wire overlay_on = text_on_top | text_on_bottom;
     assign VGA_R = vis ? (overlay_on ? 8'hFF : img_r) : 8'd0;
     assign VGA_G = vis ? (overlay_on ? 8'hFF : img_g) : 8'd0;
