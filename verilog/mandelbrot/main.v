@@ -782,13 +782,40 @@ module top (
     wire fc_valid;
     wire [7:0] fc_iter;
 
-    // fractal core instance (lowered MAX_ITER to 32 for testing)
-    localparam signed [31:0] CX_MIN = -32'sd131072; // -2.0 Q16.16
-    localparam signed [31:0] CX_MAX =  32'sd65536;  //  1.0
-    localparam signed [31:0] CY_MIN = -32'sd78643;  // -1.2
-    localparam signed [31:0] CY_MAX =  32'sd78643;  //  1.2
+    // Viewport presets (Q16.16), selected via SW[5:4]
+    // 00: Full set [-2.0, 1.0] x [-1.2, 1.2]
+    // 01: Seahorse Valley [-0.8, -0.7] x [0.05, 0.15]
+    // 10: Elephant Valley [-0.75, -0.7] x [0.10, 0.20]
+    // 11: Deep Tail [-0.745, -0.735] x [0.125, 0.135]
+    wire [1:0] view_sel = SW[5:4];
+    // Full set
+    localparam signed [31:0] CX0_MIN = -32'sd131072; // -2.0 Q16.16
+    localparam signed [31:0] CX0_MAX =  32'sd65536;  //  1.0
+    localparam signed [31:0] CY0_MIN = -32'sd78643;  // -1.2
+    localparam signed [31:0] CY0_MAX =  32'sd78643;  //  1.2
+    // Seahorse Valley
+    localparam signed [31:0] CX1_MIN = -32'sd52428;  // -0.8
+    localparam signed [31:0] CX1_MAX = -32'sd45875;  // -0.7
+    localparam signed [31:0] CY1_MIN =  32'sd3277;   //  0.05
+    localparam signed [31:0] CY1_MAX =  32'sd9830;   //  0.15
+    // Elephant Valley
+    localparam signed [31:0] CX2_MIN = -32'sd49152;  // -0.75
+    localparam signed [31:0] CX2_MAX = -32'sd45875;  // -0.7
+    localparam signed [31:0] CY2_MIN =  32'sd6554;   //  0.10
+    localparam signed [31:0] CY2_MAX =  32'sd13107;  //  0.20
+    // Deep Tail
+    localparam signed [31:0] CX3_MIN = -32'sd48824;  // -0.745
+    localparam signed [31:0] CX3_MAX = -32'sd48129;  // -0.735
+    localparam signed [31:0] CY3_MIN =  32'sd8192;   //  0.125
+    localparam signed [31:0] CY3_MAX =  32'sd8847;   //  0.135
 
-    fractal_core #(.PIXEL_WIDTH(10), .LINE_WIDTH(9), .H_VISIBLE(320), .V_VISIBLE(240), .MAX_ITER(32))
+    wire signed [31:0] CX_MIN = (view_sel==2'b00) ? CX0_MIN : (view_sel==2'b01) ? CX1_MIN : (view_sel==2'b10) ? CX2_MIN : CX3_MIN;
+    wire signed [31:0] CX_MAX = (view_sel==2'b00) ? CX0_MAX : (view_sel==2'b01) ? CX1_MAX : (view_sel==2'b10) ? CX2_MAX : CX3_MAX;
+    wire signed [31:0] CY_MIN = (view_sel==2'b00) ? CY0_MIN : (view_sel==2'b01) ? CY1_MIN : (view_sel==2'b10) ? CY2_MIN : CY3_MIN;
+    wire signed [31:0] CY_MAX = (view_sel==2'b00) ? CY0_MAX : (view_sel==2'b01) ? CY1_MAX : (view_sel==2'b10) ? CY2_MAX : CY3_MAX;
+
+    // fractal core instance with deeper iteration limit for more detail
+    fractal_core #(.PIXEL_WIDTH(10), .LINE_WIDTH(9), .H_VISIBLE(320), .V_VISIBLE(240), .MAX_ITER(256))
         fc0 (.clk(pixel_clk), .resetn(resetn),
              .cx_min(CX_MIN), .cx_max(CX_MAX), .cy_min(CY_MIN), .cy_max(CY_MAX),
              .request_pixel(fc_request), .px(fc_px), .py(fc_py),
@@ -886,8 +913,14 @@ module top (
         fb_rdata_pipe <= fb_rdata;
     end
 
-    // palette index and color
-    wire [7:0] lut_index = fb_rdata_pipe + frame_phase;
+    // palette index and color (scale iteration for stronger gradients)
+    // view_sel controls shift: 00:x1, 01:x4, 10:x2, 11:x8
+    wire [9:0] iter_scaled_tmp = (view_sel==2'b00) ? {2'b00, fb_rdata_pipe} :
+                                 (view_sel==2'b01) ? (fb_rdata_pipe << 2) :
+                                 (view_sel==2'b10) ? (fb_rdata_pipe << 1) :
+                                                     (fb_rdata_pipe << 3);
+    wire [7:0] iter_scaled = iter_scaled_tmp[7:0];
+    wire [7:0] lut_index = iter_scaled + frame_phase;
     wire [17:0] rgb18;
     color_lut_rainbow lut0 (.index(lut_index), .rgb(rgb18));
     // Text overlays in borders
