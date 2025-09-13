@@ -3,8 +3,10 @@
 // Debug top (updated): writer-select moved to SW[1], speed moved to SW[3:2]
 // - SW[1] = 1 => gradient writer (fast test)
 // - SW[1] = 0 => fractal writer (real fractal)
-// - SW[0] = animation enable
+// - SW[0] = animation enable (color cycle)
 // - SW[3:2] = speed select: 00=+1, 01=+2, 10=+4, 11=+8 per VSYNC
+// - SW[5:4] = viewport preset (00 full, 01 seahorse, 10 elephant, 11 deep)
+// - SW[7:6] = palette select (00 rainbow, 01 fire, 10 ocean, 11 grayscale)
 // =======================================================
 
 // ----------------- VGA controller (centered 320x240) -----------------
@@ -327,6 +329,46 @@ module color_lut_rainbow (
     always @(*) rgb = {r6, g6, b6};
 endmodule
 
+// Fire palette (black -> red -> yellow -> white)
+module color_lut_fire (
+    input  wire [7:0] index,
+    output reg  [17:0] rgb
+);
+    wire [7:0] t = index;
+    wire [7:0] r8 = (t < 8'd128) ? (t << 1) : 8'hFF;               // ramp up quickly then clip
+    wire [7:0] g8 = (t < 8'd128) ? (t >> 2) : ((t - 8'd128) << 1); // slow start then ramp
+    wire [7:0] b8 = (t >> 3);                                      // small blue component
+    wire [5:0] r6 = r8[7:2];
+    wire [5:0] g6 = g8[7:2];
+    wire [5:0] b6 = b8[7:2];
+    always @(*) rgb = {r6, g6, b6};
+endmodule
+
+// Ocean palette (deep blue -> cyan -> white)
+module color_lut_ocean (
+    input  wire [7:0] index,
+    output reg  [17:0] rgb
+);
+    wire [7:0] t = index;
+    wire [7:0] b8 = 8'd64 + (t);              // strong blue base
+    wire [7:0] g8 = (t < 8'd128) ? (t) : 8'hFF; // green ramps
+    wire [7:0] r8 = (t >> 2);                 // small red component
+    wire [5:0] r6 = r8[7:2];
+    wire [5:0] g6 = g8[7:2];
+    wire [5:0] b6 = b8[7:2];
+    always @(*) rgb = {r6, g6, b6};
+endmodule
+
+// Grayscale palette
+module color_lut_gray (
+    input  wire [7:0] index,
+    output reg  [17:0] rgb
+);
+    wire [7:0] y8 = index;
+    wire [5:0] y6 = y8[7:2];
+    always @(*) rgb = {y6, y6, y6};
+endmodule
+
 
 // ----------------- Synchronous framebuffer -----------------
 module framebuffer #(
@@ -616,7 +658,8 @@ module fractal_core #(
                     running <= 1'b0; map_stage <= 2'd0;
                 end else if (iter == MAX_ITER - 1) begin
                     valid <= 1'b1;
-                    iter_count <= MAX_ITER[7:0];
+                    // clamp interior to 255 for palette mapping
+                    iter_count <= 8'hFF;
                     running <= 1'b0; map_stage <= 2'd0;
                 end else begin
                     // z = z^2 + c; bring back to Q16.16 (>>>16). For imaginary do (2*z_re*z_im)>>16
@@ -921,8 +964,17 @@ module top (
                                                      (fb_rdata_pipe << 3);
     wire [7:0] iter_scaled = iter_scaled_tmp[7:0];
     wire [7:0] lut_index = iter_scaled + frame_phase;
-    wire [17:0] rgb18;
-    color_lut_rainbow lut0 (.index(lut_index), .rgb(rgb18));
+    // palette select via SW[7:6]
+    wire [1:0] pal_sel = SW[7:6];
+    wire [17:0] rgb_rainbow, rgb_fire, rgb_ocean, rgb_gray;
+    color_lut_rainbow lut_rainbow (.index(lut_index), .rgb(rgb_rainbow));
+    color_lut_fire    lut_fire    (.index(lut_index), .rgb(rgb_fire));
+    color_lut_ocean   lut_ocean   (.index(lut_index), .rgb(rgb_ocean));
+    color_lut_gray    lut_gray    (.index(lut_index), .rgb(rgb_gray));
+    wire [17:0] rgb18 = (pal_sel==2'b00) ? rgb_rainbow :
+                        (pal_sel==2'b01) ? rgb_fire    :
+                        (pal_sel==2'b10) ? rgb_ocean   :
+                                            rgb_gray;
     // Text overlays in borders
     wire text_on_top;
     wire text_on_bottom;
