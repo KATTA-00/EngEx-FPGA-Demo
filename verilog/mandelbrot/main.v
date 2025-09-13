@@ -859,7 +859,7 @@ module top (
     wire signed [31:0] CY_MAX = (view_sel==2'b00) ? CY0_MAX : (view_sel==2'b01) ? CY1_MAX : (view_sel==2'b10) ? CY2_MAX : CY3_MAX;
 
     // fractal core instance with deeper iteration limit for more detail
-    fractal_core #(.PIXEL_WIDTH(10), .LINE_WIDTH(9), .H_VISIBLE(320), .V_VISIBLE(240), .MAX_ITER(256))
+    fractal_core #(.PIXEL_WIDTH(10), .LINE_WIDTH(9), .H_VISIBLE(320), .V_VISIBLE(240), .MAX_ITER(512))
         fc0 (.clk(pixel_clk), .resetn(resetn),
              .cx_min(CX_MIN), .cx_max(CX_MAX), .cy_min(CY_MIN), .cy_max(CY_MAX),
              .request_pixel(fc_request), .px(fc_px), .py(fc_py),
