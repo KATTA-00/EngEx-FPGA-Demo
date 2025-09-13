@@ -94,7 +94,8 @@ module text_overlay_pattern #(
     output reg        text_on
 );
     localparam integer SCALE = (1 << SCALE_LOG2);
-    localparam integer NCHARS = 9; // max among: "DEEP TAIL" (9 incl space)
+    // Prefix with "MANDELBROT " + preset name; max = "MANDELBROT DEEP TAIL" (20 chars)
+    localparam integer NCHARS = 20;
     localparam integer RAW_W = NCHARS * 8;
     localparam integer RAW_H = 8;
     localparam integer W = RAW_W * SCALE;
@@ -106,55 +107,68 @@ module text_overlay_pattern #(
     // Place just below ESCAL banner: ESCAL Y0 = 120+240+8+20 (=388), ESCAL H=32, add 4px pad => 424
     localparam [8:0] Y_BASE = 9'd424;
     localparam [9:0] X0 = (SCREEN_W - W)/2;
-    localparam [8:0] Y0 = Y_BASE;
+    localparam [8:0] Y0 = Y_BASE + 9'd10;
 
     wire [9:0] x_local = sx - X0;
     wire [8:0] y_local = sy - Y0;
     wire [7:0] x_char = x_local >> SCALE_LOG2; // 0..(RAW_W-1)
     wire [3:0] y_char = y_local >> SCALE_LOG2; // 0..7
-    wire [3:0] char_pos = x_char[7:3];         // 0..8
+    wire [4:0] char_pos = x_char[7:3];         // 0..19
     wire [2:0] col_idx  = x_char[2:0];
 
     // Letter enumeration (reuse ids for clarity)
     localparam [5:0]
         L_A=6'd0, L_C=6'd1, L_D=6'd2, L_E=6'd3, L_F=6'd4, L_H=6'd5, L_I=6'd6,
-        L_L=6'd7, L_M=6'd8, L_N=6'd9, L_O=6'd10, L_P=6'd11, L_R=6'd12,
+        L_L=6'd7, L_M=6'd8, L_N=6'd9, L_O=6'd10, L_P=6'd11, L_R=6'd12, L_B=6'd16,
         L_S=6'd13, L_T=6'd14, L_U=6'd15, L_SPACE=6'd63;
 
-    // Phrase selection per view
-    // 00: "FULL SET" (8 chars)
-    // 01: "SEAHORSE" (8 chars)
-    // 10: "ELEPHANT" (8 chars)
-    // 11: "DEEP TAIL" (9 chars)
+    // Phrase selection per view, prefixed with "MANDELBROT " (11 chars)
+    // 00: "MANDELBROT FULL SET" (20)
+    // 01: "MANDELBROT SEAHORSE" (19)
+    // 10: "MANDELBROT ELEPHANT" (19)
+    // 11: "MANDELBROT DEEP TAIL" (20)
     reg [5:0] letter_idx;
     always @(*) begin
         case (view_sel)
-            2'b00: begin // FULL SET
+            2'b00: begin // MANDELBROT FULL SET
                 case (char_pos)
-                    0: letter_idx=L_F; 1: letter_idx=L_U; 2: letter_idx=L_L; 3: letter_idx=L_L;
-                    4: letter_idx=L_SPACE; 5: letter_idx=L_S; 6: letter_idx=L_E; 7: letter_idx=L_T;
+                    // "MANDELBROT "
+                    0: letter_idx=L_M; 1: letter_idx=L_A; 2: letter_idx=L_N; 3: letter_idx=L_D;
+                    4: letter_idx=L_E; 5: letter_idx=L_L; 6: letter_idx=L_B; 7: letter_idx=L_R;
+                    8: letter_idx=L_O; 9: letter_idx=L_T; 10: letter_idx=L_SPACE;
+                    // "FULL SET"
+                    11: letter_idx=L_F; 12: letter_idx=L_U; 13: letter_idx=L_L; 14: letter_idx=L_L;
+                    15: letter_idx=L_SPACE; 16: letter_idx=L_S; 17: letter_idx=L_E; 18: letter_idx=L_T;
                     default: letter_idx=L_SPACE;
                 endcase
             end
-            2'b01: begin // SEAHORSE
+            2'b01: begin // MANDELBROT SEAHORSE
                 case (char_pos)
-                    0: letter_idx=L_S; 1: letter_idx=L_E; 2: letter_idx=L_A; 3: letter_idx=L_H;
-                    4: letter_idx=L_O; 5: letter_idx=L_R; 6: letter_idx=L_S; 7: letter_idx=L_E;
+                    0: letter_idx=L_M; 1: letter_idx=L_A; 2: letter_idx=L_N; 3: letter_idx=L_D;
+                    4: letter_idx=L_E; 5: letter_idx=L_L; 6: letter_idx=L_B; 7: letter_idx=L_R;
+                    8: letter_idx=L_O; 9: letter_idx=L_T; 10: letter_idx=L_SPACE;
+                    11: letter_idx=L_S; 12: letter_idx=L_E; 13: letter_idx=L_A; 14: letter_idx=L_H;
+                    15: letter_idx=L_O; 16: letter_idx=L_R; 17: letter_idx=L_S; 18: letter_idx=L_E;
                     default: letter_idx=L_SPACE;
                 endcase
             end
-            2'b10: begin // ELEPHANT
+            2'b10: begin // MANDELBROT ELEPHANT
                 case (char_pos)
-                    0: letter_idx=L_E; 1: letter_idx=L_L; 2: letter_idx=L_E; 3: letter_idx=L_P;
-                    4: letter_idx=L_H; 5: letter_idx=L_A; 6: letter_idx=L_N; 7: letter_idx=L_T;
+                    0: letter_idx=L_M; 1: letter_idx=L_A; 2: letter_idx=L_N; 3: letter_idx=L_D;
+                    4: letter_idx=L_E; 5: letter_idx=L_L; 6: letter_idx=L_B; 7: letter_idx=L_R;
+                    8: letter_idx=L_O; 9: letter_idx=L_T; 10: letter_idx=L_SPACE;
+                    11: letter_idx=L_E; 12: letter_idx=L_L; 13: letter_idx=L_E; 14: letter_idx=L_P;
+                    15: letter_idx=L_H; 16: letter_idx=L_A; 17: letter_idx=L_N; 18: letter_idx=L_T;
                     default: letter_idx=L_SPACE;
                 endcase
             end
-            default: begin // 2'b11: DEEP TAIL
+            default: begin // 2'b11: MANDELBROT DEEP TAIL
                 case (char_pos)
-                    0: letter_idx=L_D; 1: letter_idx=L_E; 2: letter_idx=L_E; 3: letter_idx=L_P;
-                    4: letter_idx=L_SPACE; 5: letter_idx=L_T; 6: letter_idx=L_A; 7: letter_idx=L_I;
-                    8: letter_idx=L_L;
+                    0: letter_idx=L_M; 1: letter_idx=L_A; 2: letter_idx=L_N; 3: letter_idx=L_D;
+                    4: letter_idx=L_E; 5: letter_idx=L_L; 6: letter_idx=L_B; 7: letter_idx=L_R;
+                    8: letter_idx=L_O; 9: letter_idx=L_T; 10: letter_idx=L_SPACE;
+                    11: letter_idx=L_D; 12: letter_idx=L_E; 13: letter_idx=L_E; 14: letter_idx=L_P;
+                    15: letter_idx=L_SPACE; 16: letter_idx=L_T; 17: letter_idx=L_A; 18: letter_idx=L_I; 19: letter_idx=L_L;
                     default: letter_idx=L_SPACE;
                 endcase
             end
@@ -181,6 +195,11 @@ module text_overlay_pattern #(
                 L_D: case(y)
                     0: glyph_row3=8'b11111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
                     3: glyph_row3=8'b10000010; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b11111100; default: glyph_row3=8'b00000000; endcase
+                // B
+                L_B: case(y)
+                    0: glyph_row3=8'b11111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
+                    3: glyph_row3=8'b11111100; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
                     6: glyph_row3=8'b11111100; default: glyph_row3=8'b00000000; endcase
                 // E
                 L_E: case(y)
@@ -227,6 +246,11 @@ module text_overlay_pattern #(
                     0: glyph_row3=8'b11111100; 1: glyph_row3=8'b10000010; 2: glyph_row3=8'b10000010;
                     3: glyph_row3=8'b11111100; 4: glyph_row3=8'b10010000; 5: glyph_row3=8'b10001000;
                     6: glyph_row3=8'b10000100; default: glyph_row3=8'b00000000; endcase
+                // M
+                L_M: case(y)
+                    0: glyph_row3=8'b10000010; 1: glyph_row3=8'b11000110; 2: glyph_row3=8'b10101010;
+                    3: glyph_row3=8'b10010010; 4: glyph_row3=8'b10000010; 5: glyph_row3=8'b10000010;
+                    6: glyph_row3=8'b10000010; default: glyph_row3=8'b00000000; endcase
                 // S
                 L_S: case(y)
                     0: glyph_row3=8'b01111110; 1: glyph_row3=8'b10000000; 2: glyph_row3=8'b10000000;
