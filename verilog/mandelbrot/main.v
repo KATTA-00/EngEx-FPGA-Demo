@@ -849,7 +849,7 @@ module top (
     localparam signed [31:0] CY2_MAX =  32'sd13107;  //  0.20
     // Deep Tail (aspect-correct around -0.74 + 0.13i)
     localparam signed [31:0] CX3_MIN = -32'sd48824;  // -0.745
-    localparam signed [31:0] CX3_MAX = -32'sd48129;  // -0.735
+    localparam signed [31:0] CX3_MAX = -32'sd48169;  // -0.735
     localparam signed [31:0] CY3_MIN =  32'sd8274;   //  0.12625
     localparam signed [31:0] CY3_MAX =  32'sd8765;   //  0.13375
 
